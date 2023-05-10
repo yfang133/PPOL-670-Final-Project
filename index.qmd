@@ -1,0 +1,807 @@
+---
+title: "PPOL 670 Final Project"
+subtitle: "Examining the Effectiveness and Future Prospects of the LIHTC Project"
+date: "2023-05-10"
+title-block-banner: true
+author:
+  - "Jiaxi Chen"
+  - "Daniel Fang"
+  - "Chenyu Jin"
+  - "Cloris Li"
+format: 
+  html:
+    self-contained: true
+warning: false
+theme: cosmo
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Introduction
+
+The Low Income Housing Tax Credit (LIHTC) is the longest running affordable housing policy program in the U.S.. Created by the Tax Reform Act in 1986, LIHTC has given approximately \$9 billion in annual budget authority to state and local agencies that issue credits for rental housing targeted to lower-income populations (HUD, 2023). Under this program, developers receive these credits and are incentivized to make equity investments in affordable housing. These investments have been beneficial because they reduce the costly method of financing or federal intervention, while enhancing private-side capacity to address housing problems (Urban Institute, 2018). Supporting over 110,000 rental units a year, LIHTC was the single most critical pillar of the safety net that managed to preserve and expand the U.S.'s affordable rental housing stock (Urban Institute, 2018).
+
+Despite its popularity, the LIHTC program falls short in many criteria, bringing increasing concern over the program's effectiveness and future prospects. The first among the many are the unsustainable nature of the program itself: initially, units were only required to meet the affordability status for a minimum of 15 years. Although the age limit extended to 30 years later on through Congress, many of the originally qualified LIHTC projects no longer are affordable housing, and are no longer being monitored in the HUD database. There are also questions on whether LIHTC projects have really benefited the lowest-income households in reality. Many projects have raised their eligibility requirements on applicants, forging potential barriers to underserved populations. Lastly, in the shadow of economic downturn and huge inflation, it is increasingly difficult to generate motivation for private investment in affordable housing. In the near future, this may entail a serious affordable housing crisis if LIHTC fails to deliver a stable supply, while many of the past projects are due to expire.
+
+With a profound interest in examining the past achievements and realities of the LIHTC program, our project tracks the development pattern of LIHTC projects in the U.S. over the years, revises and addresses whether past efforts and current efforts to tackle housing crises have been effective. Doing so will enable us to keep giving informative suggestions on future policies that could further incentivize the production of affordable housing units.
+
+## Research Questions
+
+1.  Within which types of housing markets does LIHTC work best? How do LIHTC project locations vary across geographies? Where is LIHTC investment needed but missing?
+
+2.  How are eligibility/amount of LIHTC credit determined by different variables in the dataset? How can this inform the distribution of federal resources to most efficiently support LIHTC properties?
+
+3.  Taken together, where is LIHTC development and preservation most needed? How can states best target those areas through the allocation process of LIHTC under their jurisdiction?
+
+## Data Source
+
+HUD's LIHTC database contains information on 52,006 projects and 3.55 million housing units placed in service between 1987 and 2021. The database includes project address, number of units and low-income units, number of bedrooms, year the credit was allocated, year the project was placed in service, whether the project was new construction or rehab, type of credit provided, and other sources of project financing. The database has been geocoded, enabling researchers to look at the geographical distribution and neighborhood characteristics of tax credit projects. It may also help show how incentives to locate projects in low-income areas and other underserved markets are working (HUD).
+
+After an initial look of the data structure, we found that the unit of analysis of the data is individual projects across the country.The dataset has 50567 observations of 75 variables. And it has 1344972 missing values.
+
+## Methodology
+
+We are going to use exploratory data analysis which includes visualizations as well as advanced techniques including geospatial analysis and supervised machine learning.
+
+## Exploratory Data Analysis
+
+In this section, we use EDA, primarily data visualizations to provide a brief overview of the LIHTC dataset. Data visualizations mostly focus on five variables: n_units, li_units, trgt_pop, metro, and dda. The first two variables are numeric variables. The variable n_units is the total number of units as reported by HFA, whereas li_units is the total number of low income units as reported by HFA. The last three are categorical variables, with trgt_pop representing population with specialized services or facilities, metro representing whether the census tract was metro or non-metro at the time the property was placed into service, and dda representing whether the census tract was in a difficult development area, also based on the year the property was placed into service. Considering the data type, we made density plots for the two numeric variables, and bar charts for the categorical variables. Bar charts are effective in reflecting the distribution of different categories, which allow for direct comparisons between them.
+
+```{r}
+# load packages
+library(tidyverse)
+library(tigris)
+library(tidyr)
+library(readr)
+library(stringr)
+library(lubridate)
+library(sf)
+library(patchwork)
+library(tidycensus)
+library(httr)
+library(jsonlite)
+library(testthat)
+library(tidymodels)
+library(rpart)
+library(themis)
+library(parsnip)
+library(caret)
+library(rpart.plot)
+```
+
+```{r}
+# read in dataset
+LIHTCPUB <- read_csv("LIHTCPUB.csv")
+```
+
+```{r}
+# allocamt
+summary(LIHTCPUB$allocamt)
+```
+
+n_units: A density plot is a geographical representation of the probability distribution of a continuous dataset. It is a smoothed version of a histogram and can be used to visualize the underlying distribution of data points. The x-axis represents the range of values in the dataset. The y-axis is used to visualize the relative density of the data points along the x-axis, though it does not provide the exact probability. In this case, the plot shows that there is a wide dispersion in the number of units reported by HFA. However, the number of units reported by HFA is relatively concentrated on the lower values, indicating that the distribution is right-skewed.
+li_units: In this case, the plot shows that there is a wide dispersion in the number of low income units reported by HFA. However, the number of low income units is relatively concentrated on the lower values, indicating that the distribution is right-skewed. In addition, the presence of two peaks on the left suggests that the data distribution is bimodal, meaning there are two distinct clusters of low income units reported by HFA.\
+```{r}
+
+```
+
+```{r}
+# n_units
+summary(LIHTCPUB$n_units)
+
+# li_units
+summary(LIHTCPUB$li_units)
+
+```
+
+```{r}
+# Filter the data for n_units under 500
+units_data <- LIHTCPUB %>% 
+  filter(!is.na(n_units) & n_units < 500 & !is.na(li_units) & li_units < 500) 
+
+# Calculate the density for n_units
+n_units_density <- density(units_data$n_units)
+
+# Calculate the density for li_units
+li_units_density <- density(units_data$li_units, na.rm = TRUE)
+
+# Create a data frame for the density values
+density_data <- data.frame(x = c(n_units_density$x, li_units_density$x),
+                           density = c(n_units_density$y, li_units_density$y),
+                           variable = rep(c("n_units", "li_units"), each = length(n_units_density$x)))
+
+# Plot the combined density plot
+ggplot(density_data, aes(x = x, y = density, fill = variable, alpha = variable)) +
+  geom_area() +
+  scale_fill_manual(values = c("n_units" = "steelblue", "li_units" = "firebrick")) +
+  scale_alpha_manual(values = c("n_units" = 0.5, "li_units" = 0.5)) +
+  labs(title = "Density of Total Number of Units and Low Income Units (n_units < 500)",
+       x = "Number of Units",
+       y = "Density") +
+  theme_minimal() +
+  theme(text = element_text(size = 12, family = "serif"),
+        legend.title = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+
+```
+
+
+```{r}
+# inc_ceil
+ggplot(drop_na(LIHTCPUB, inc_ceil), aes(x = factor(inc_ceil))) +
+  geom_bar(fill = "darkorange",
+           alpha = 0.7,
+           width = 0.4) +
+  scale_x_discrete(labels = c("1" = "50% AMGI", 
+                              "2" = "60% AMGI", 
+                              "3" = "Income Average",
+                              "9" = "Not reported")) +
+  labs(title = "Elected rent/income ceiling for low-income units", 
+       x = "Elected rent/income ceiling") +
+  theme_minimal() +
+  theme(text = element_text(size = 12, family = "serif"),
+        plot.title = element_text(face = "bold"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+```
+
+
+trgt_pop: This grouped bar chart shows that the number of housing units with population needing specialized services and facilities as a target exceeds 25,000, while those that do not target such population is close to but slightly lower than 10,000. All missing values have been dropped before creating the bar chart.
+
+```{r}
+# Combine the data for all targeted populations
+targeted_populations <- drop_na(LIHTCPUB, trgt_pop, trgt_fam, trgt_eld, trgt_dis, trgt_hml) %>%
+  select(trgt_pop, trgt_fam, trgt_eld, trgt_dis, trgt_hml) %>%
+  pivot_longer(cols = everything(), names_to = "Targeted_Population", values_to = "Value")
+
+# Plot the grouped bar graph
+ggplot(targeted_populations, aes(x = Targeted_Population, fill = factor(Value))) +
+  geom_bar(alpha = 0.7, position = "dodge") +
+  labs(title = "Targeted Populations in LIHTC Properties") +
+  scale_x_discrete(labels = c("trgt_pop" = "Specialized Services and Facilities",
+                              "trgt_fam" = "Families",
+                              "trgt_eld" = "Elderly",
+                              "trgt_dis" = "Disabled",
+                              "trgt_hml" = "Homeless")) +
+  scale_fill_manual(values = c("1" = "steelblue", "2" = "firebrick", "0" = "grey"),
+                    labels = c("0" = "Not indicated", "1" = "Yes", "2" = "No")) +
+  guides(fill = guide_legend(title = NULL)) +  # Remove legend title
+  theme_minimal() +
+  theme(text = element_text(size = 12, family = "serif"),
+        plot.title = element_text(face = "bold"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+
+```
+
+
+```{r}
+# credit
+ggplot(drop_na(LIHTCPUB, credit), aes(x = factor(credit))) +
+  geom_bar(fill = "plum",
+           width = 0.4) +
+  labs(title = "Type of Credit Percentage") +
+  scale_x_discrete(labels = c("1" = "30% present value", 
+                              "2" = "70% present value",
+                              "3" = "Both",
+                              "4" = "TCEP only")) +
+  theme_minimal() +
+  theme(text = element_text(size = 12, family = "sans"),
+        plot.title = element_text(face = "bold"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+```
+
+metro: The number of census tract that is metro/non-metro city at the time that property N was placed into service is around 40,000, while the number of census tract that is metro/central city is over 5,000 and non-metro is approximately 2,500. All missing values have been dropped before creating the bar chart.
+
+dda: While the number of census tract in non-metro GO zone difficult development area (DDA), non-metro DDA, and metro GO Zone DDA is extremely low, the number of census tract in metro DDA is approximately 2,500 and the number of census tract not in a DDA is roughly 10,000. All missing values have been dropped before creating the bar chart.
+
+```{r}
+# metro
+mtr <- ggplot(drop_na(LIHTCPUB, metro), aes(x = factor(metro))) +
+  geom_bar(fill = "forestgreen",
+           alpha = 0.8,
+           width = 0.3) +
+  labs(title = "Whether the Census Tract Metro or Non-Metro \nat the Time the Property N was Placed into Service ") +
+  scale_x_discrete(labels = c("1" = "Metro/Non-Central City", 
+                              "2" = "Metro/Central City",
+                              "3" = "Non-Metro")) +
+  coord_flip() + 
+  theme_minimal() +
+  theme(text = element_text(size = 6, family = "serif"),
+        plot.title = element_text(face = "bold"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+```
+
+        
+```{r}
+# DDA
+dda <- ggplot(drop_na(LIHTCPUB, dda), aes(x = factor(dda))) +
+  geom_bar(fill = "forestgreen",
+           alpha = 0.8,
+           width = 0.4) +
+  labs(title = "Whether the Census Tract Metro is in a \n Difficult Development Area",
+       subtitle = "DDA status is based on the year the property was placed in service") +
+  scale_x_discrete(labels = c("0" = "Not in DDA",
+                              "1" = "In Metro DDA",
+                              "2" = "In Non-Metro DDA",
+                              "3" = "In Metro GO Zone DDA",
+                              "4" = "In Non-Metro GO Zone DDA")) +
+  coord_flip() + 
+  theme_minimal() +
+  theme(text = element_text(size = 6, family = "serif"),
+        plot.title = element_text(face = "bold"),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank())
+```
+
+```{r}
+mtr + dda
+```
+
+
+Overall, the annual dollar amount of tax credits allocated remains relatively stable and does not increase significantly with the increase in the total number of units as reported by HFA.
+
+The chart below shows that most Annual dollar amounts of tax credits allocated are concentrated in houses with total number of units as reported by HFA under 500, and most Annual dollar amounts of tax for houses with a total number of units as reported by HFA Credits allocated are not available, that is, the HUD National Low Income Housing Tax Credit is mainly for small houses, and relatively few large houses can enjoy the HUD National Low Income Housing Tax Credit.
+
+```{r}
+options(scipen = 999)
+LIHTCPUB%>%
+  group_by(n_units)%>%
+  summarise(allocamt_avg=mean(allocamt,na.rm=TRUE))%>%
+  ggplot(aes(x=n_units,y=allocamt_avg))+
+  geom_point(color="steelblue")+
+  labs(x="Number of Units",y="Mean Allocation Amount",
+       title = "The Relationship between Number of LIHTC Units and Credit Allocation",
+       subtitle = "Number of units generally concentrate at the lower end and form a weak positive relationship.",
+       caption = "Sources: LIHTC Dataset"
+       )+
+  theme_minimal() +
+  theme(
+    text = element_text(family = "serif", size = 12)
+  )
+```
+
+LIHTC mainly corresponds to the Total number of units as reported by HFA mainly in houses below 300.
+
+An analysis of the distribution of the Total number of units as reported by HFA for houses enjoying Annual dollar amount of tax credits allocated, the histogram shows that the majority of the Total number of units as reported by HFA is below 300, or HUD National Low The Income Housing Tax Credit is primarily for the Total number of units as reported by HFA homes under 300.
+
+```{r}
+LIHTCPUB%>%
+  filter(is.na(allocamt)==FALSE,
+         n_units<500
+         )%>%
+  ggplot(aes(x=n_units))+
+  geom_histogram(fill="steelblue",color="white")+
+  labs(x="Number of Units",y="Mean Allocation Amount",
+       title = "The Distribution of LIHTC Units and Credit Allocation",
+       caption = "Sources: LIHTC Dataset"
+       )+
+  theme_minimal() +
+  theme(
+    text = element_text(family = "serif", size = 12)
+  )
+```
+
+Annual dollar amount of tax credits allocated increases over time.
+
+By plotting the change chart of Annual dollar amount of tax credits allocated in different years, on the whole, Annual dollar amount of tax credits allocated is on the rise, but affected by the real estate market boom, economic cycle and other factors, Annual dollar amount of tax credits allocated showed a certain fluctuation trend in different years, mainly due to the change in the number of households covered by the HUD National Low Income Housing Tax Credit. If the economy is booming, fewer households apply for the HUD National Low Income Housing Tax Credit, and the annual dollar amount of tax credits allocated tends to be lower.
+
+```{r}
+LIHTCPUB%>%
+  filter(yr_pis!=8888,
+         yr_pis!=9999
+         )%>%
+  group_by(yr_pis)%>%
+  summarise(allocamt_sum=sum(allocamt,na.rm=TRUE))%>%
+  ggplot(aes(x=yr_pis,y=allocamt_sum))+
+  geom_line(color="steelblue", size = 2)+
+  labs(x="Years", y = "Yearly Credit Allocation Amount",
+       title = "Credit Allocation Amount in Dollars, 1987 - 2020",
+       subtitle = "COVID-19 discouraged credit allocation, putting LIHTC's endurance duing economic fluctuations into question",
+       caption = "Sources: LIHTC Dataset"
+       )+
+  theme_minimal() +
+  theme(
+    text = element_text(family = "serif", size = 12)
+  )
+```
+
+Elected rent/income ceiling for low income units (60% AMGI ) corresponds to the Annual dollar amount of tax credits allocated up to.
+
+The households covered by the HUD National Low Income Housing Tax Credit are mainly households with an elected rent/income ceiling for low income units at 60% AMGI, followed by households with an Elected rent/income ceiling for low income units with 50% AMGI. As well as fewer Elected rent/income ceiling for low income units for Income Average households, taken together, HUD National Low Income Housing Tax Credit is primarily aimed at low-income households, indicating HUD National Low Income Housing Tax Credit can better protect the interests of low-income families and reduce the burden of low-income families.
+
+```{r}
+LIHTCPUB%>%
+  group_by(inc_ceil)%>%
+  summarise(allocamt_total=sum(allocamt,na.rm=TRUE))%>%
+  ggplot(aes(x=factor(inc_ceil),y=allocamt_total))+
+  geom_bar(stat = "identity",fill="steelblue")+
+labs(x="Rent/income Ceiling Type", y="Mean Allocation Amount",
+       title = "Credit Allocation, broken down by types of rent/income ceiling",
+       subtitle = "Most rent/income ceilings require 60% AMGI to be eligible",
+       caption = "Sources: LIHTC Dataset"
+       )+
+  theme_minimal() +
+  theme(
+    text = element_text(family = "serif", size = 12)
+  )
+```
+
+## Geospatial analysis
+
+Next, our geospatial analysis explores the spatial distribution and characteristics of LIHTC properties. We aim to understand the level of clustering among LIHTC properties and identify potential "hot spots" where they are concentrated. Additionally, we compare clustered LIHTC properties with randomly-distributed and dispersed properties in terms of several factors. These factors include whether the property has undergone a raise in eligibility basis, the percentage of properties located in DDAs (Difficult Development Areas), the income level of the census tract, and the availability of public resources in the area, such as public transportation. Furthermore, we investigate whether LIHTC properties exhibit patterns of spatio-temporal diffusion over several metropolitan areas across the country. By analyzing these geospatial patterns, we gain insights into the distribution and characteristics of LIHTC properties, which can inform policy and decision-making related to future affordable housing initiatives.
+
+```{r}
+data <- LIHTCPUB[complete.cases(LIHTCPUB$longitude, LIHTCPUB$latitude), ]
+data_geo <- data %>%
+  st_as_sf(coords = c("longitude", "latitude"))%>%
+  st_set_crs(value = 4326)
+```
+
+### Are LIHTC properties effectively serving the low-income population?
+
+To begin with, we look at the distribution of LIHTC properties, based on whether they received a raise in eligibility basis. By definition, eligible basis is the sum of the eligible cost elements that are subject to depreciation, such as expenditures for new construction, rehabilitation and building acquisition, and is the top line of a building's tax credit calculation (NCSHA Housing Credit Connect, 2018). LIHTC uses a calculation process to derive the final total tax credits that can be issued to individual property investors. Thus, the higher costs a property incurs (or the more square footages are being built), the higher tax credits generally will be. However, when the eligible basis increases, it typically means that the income limits for eligible households are adjusted upward, allowing LIHTC properties to accommodate tenants with higher income level.This would severely reduce housing affordability for lower-income households, and generate negative social mobility effects such as neighborhood displacements.
+
+```{r}
+# Create a bounding box polygon for the continental US
+continental_us <- st_polygon(list(rbind(c(-125, 24), c(-66, 24), c(-66, 50), c(-125, 50), c(-125, 24))))
+
+# Filter the data_geo object to only include the continental US
+data_geo <- data_geo[continental_us, ]
+
+# Plot the filtered data
+data_geo %>%
+  filter(!is.na(basis)) %>%
+  mutate(basis = as.factor(basis)) %>%
+  ggplot() +
+  geom_sf(aes(color = basis, alpha = ifelse(basis == "2", 0.01, 50))) +
+  scale_color_manual(values = c("1" = "orange", "2" = "grey"), labels = c("Yes", "No")) +
+  guides(alpha = "none", color = guide_legend(title = "If Eligibility Basis \n Has Increased")) +
+  labs(title = "Many LIHTC Properties Have Raised Eligible Basis",
+       subtitle = "The east coast sees significant increase in eligible basis in both urban and rural areas",
+       caption = "Sources: LIHTC Dataset") +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "serif", size = 12),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank()
+  )
+```
+
+As the plot indicates, many properties in the east coast and the Midwest is going through drastic changes as many properties have raised eligible basis over time. The increase in eligible basis can result from various factors, such as changes in federal or state regulations, adjustments based on local market conditions, or the need to attract a broader range of income-qualified residents. However, if the eligible basis is increased in areas experiencing gentrification or rapid neighborhood changes, there is a risk that existing low-income residents may be displaced or face pressure to leave as housing costs rise. This can lead to the loss of affordable housing options and contribute to the displacement of vulnerable populations.
+
+Next, we examine the spatial distribution of LIHTC properties based on their Difficult Development Area (DDA) qualifications. Difficult Development Areas (DDAs) are areas that have "high construction, land, and utility costs relative to area median gross income.??? If a property is located in a DDA, the eligible bases of its buildings can be multiplied by a facter of 1.3, which leads to an increase in total potential credits.
+
+```{r}
+# edit the dda variable
+data_geo <- data_geo %>%
+  mutate(dda_if = case_when(
+    dda == 0 ~ 0,
+    dda == 1 ~ 1,
+    dda == 2 ~ 1,
+    dda == 3 ~ 1,
+    dda == 4 ~ 1),
+      dda_urban = case_when(
+        dda %in% c(1, 3) ~ 1,
+        dda %in% c(2, 4) ~ 0,
+      TRUE ~ NA_real_
+      ))
+
+# load and subset states data
+states <- tigris::states(cb = TRUE, progress_bar = FALSE) %>%
+  filter(!STATEFP %in% c("78", "69", "66", "60", "72", "02", "15")) %>%
+  st_transform(crs = 4326)
+```
+
+```{r}
+# Calculate proportion of DDA properties in each state
+state_props <- data_geo %>%
+  filter(!is.na(dda_if)) %>%
+  group_by(proj_st) %>%
+  summarise(dda_proportion = mean(dda_if == 1)) %>%
+  ungroup()
+
+# Perform the spatial join
+merged_data <- st_join(states, state_props)
+
+data_dda <- data_geo %>%
+  filter(dda_if == 1)
+
+# Plot the choropleth map
+ggplot(merged_data) +
+  geom_sf(data = states) +
+  geom_sf(data = merged_data, aes(fill = dda_proportion)) +
+  geom_sf(data = data_dda, color = "#FF9112", size = 0.5) +
+  labs(title = "Proportion of LIHTC Properties that are Located \n in Difficult Development Areas (DDA) by State",
+       caption = "Sources: LIHTC Dataset") +
+  scale_fill_gradient(low = "#cfe8f3", high = "#062635", name = "DDA Proportion") +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "serif", size = 12),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank()
+  )
+
+```
+
+This plot shows the proportion of LIHTC (Low-Income Housing Tax Credit) properties that are located in Difficult Development Areas (DDA) by state. The choropleth map uses color to represent the DDA proportion, with darker shades indicating a higher proportion of LIHTC properties located in DDAs. States with darker shades indicate a higher proportion of LIHTC properties located in DDAs, while lighter shades indicate a lower proportion. In general, the regions where construction costs are significant higher than the area median income concentrate in New York, Southeast region and the two metropolitan areas (Los Angeles and San Francisco).
+
+### Spatio-temporal diffusion of LIHTC proerties over several metropolitan areas across the country
+
+Based on the information retrieved from the above maps, we proceed to examine the differences in the geospatial patterns of LIHTC projects. Theoretically, LIHTC developments in the DDA areas tend to exhibit more clustering than non-DDA areas since these areas tend to be associated with more urbanization and thus more land costs. Since these areas tend to have higher densities, a DDA designation provides incentives for properties to cluster. From the map above, we selected 4 metropolitan areas in the US to test our hypothesis.
+
+### Type 1: High DDA Proportion, Low Clustering (San Francisco)
+
+```{r}
+sf_metro_counties <- c("041","075", "081", "085", "095", "013", "001")
+
+sf_income <- get_acs(
+  geography = "tract",
+  variables = "B19013_001",
+  state = "CA",
+  county = sf_metro_counties,
+  geometry = TRUE,
+  year = 2019,
+  progress = FALSE
+)
+
+ggplot() +
+  geom_sf(data = sf_income, aes(fill = estimate)) +
+  geom_sf(data = data_geo %>% filter(cnty2010 %in% sf_metro_counties, st2010 == "06"), color = "orange", size = 1) +
+  scale_fill_gradient(low = "#cfe8f3", high = "#062635",
+                      labels = scales::dollar,
+                      name = "Median Household Income") +
+  labs(title = "LIHTC Spatial Distribution across San Francisco Metro Area, CA",
+       caption = "Sources: American Community Survey (ACS) | Tidycensus R package | LIHTC Dataset") +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "serif"),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank()
+  )
+```
+
+### Type 2: Low DDA Proportion, High Clustering (Tampa, FL)
+
+```{r}
+tampa_metro_counties <- c("057", "081", "101", "103", "115")
+
+tampa_income <- get_acs(
+  geography = "tract",
+  variables = "B19013_001",
+  state = "FL",
+  county = tampa_metro_counties,
+  geometry = TRUE,
+  year = 2019,
+  progress = FALSE
+)
+
+ggplot() +
+  geom_sf(data = tampa_income, aes(fill = estimate)) +
+  geom_sf(data = data_geo %>% filter(cnty2010 %in% tampa_metro_counties, st2010 == "12"), color = "orange", size = 1) +
+  scale_fill_gradient(low = "#cfe8f3", high = "#062635",
+                      labels = scales::dollar,
+                      name = "Median Household \n Income") +
+  labs(title = "LIHTC Spatial Distribution across Tampa Metro Area, FL",
+       caption = "Sources: American Community Survey (ACS) | Tidycensus R package | LIHTC Dataset") +
+  theme_minimal() +
+  theme(text = element_text(family = "serif", size = 8),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank())
+
+```
+
+### Type 3: Low DDA Proportion, Low Clustering (Houston, TX)
+
+```{r}
+houston_metro_counties <- c("201")
+
+houston_income <- get_acs(
+  geography = "tract",
+  variables = "B19013_001",
+  state = "TX",
+  county = houston_metro_counties,
+  geometry = TRUE,
+  year = 2019,
+  progress = FALSE
+)
+
+ggplot() +
+  geom_sf(data = houston_income, aes(fill = estimate)) +
+  geom_sf(data = data_geo %>% filter(cnty2010 %in% houston_metro_counties, st2010 == "48"), color = "orange", size = 1) +
+  scale_fill_gradient(low = "#cfe8f3", high = "#062635",
+                      labels = scales::dollar,
+                      name = "Median Household Income") +
+  labs(title = "LIHTC Spatial Distribution across Houston, TX",
+       caption = "Sources: American Community Survey (ACS) | Tidycensus R package | LIHTC Dataset") +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "serif"),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank()
+  )
+
+```
+
+### Type 4: Low DDA Proportion, High Clustering (Washington, D.C.)
+
+```{r}
+dc_income <- get_acs(
+  geography = "tract",
+  variables = "B19013_001",
+  state = "DC",
+  county = "001",
+  geometry = TRUE,
+  year = 2019,
+  progress = FALSE
+) %>%
+  st_transform(st_crs(4326))
+
+
+ggplot() +
+  geom_sf(data = dc_income, aes(fill = estimate)) +
+  geom_sf(data = data_geo %>% filter(cnty2010 == "001", st2010 == "11"), color = "orange", size = 1) +
+  scale_fill_gradient(low = "#cfe8f3", high = "#062635",
+                      labels = scales::dollar,
+                      name = "Median Household Income") +
+  labs(title = "LIHTC Spatial Distribution across Washington, DC",
+       caption = "Sources: American Community Survey (ACS) | Tidycensus R package | LIHTC Dataset") +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "serif"),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank()
+  )
+
+```
+
+### Case Study: LIHTC and Public Resources
+
+The spatial distribution of LIHTC properties in different metropolitan areas has profound policy implications, as it directly affects how state and local government dedicate public resources and develop housing policies that are tailor to fit local contexts. For a city like D.C., a low DDA proportion with high density of LIHTC housing facilitates government intervention decisions, as the clustering may be a result of the clustering of important public resources too, such as public transportation. In the map below, we aim to show the distribution of LIHTC housing near DC metro stops:
+
+```{r}
+# load metro lines and stations shp file
+dc_lines <- st_read("dcmetro/Metro_Lines_in_DC.shp", quiet = TRUE) %>%
+  st_transform(st_crs(4326))
+
+dc_stations <- st_read("dcmetro/Metro_stations_in_DC/Metro_Lines_in_DC.shp", quiet = TRUE) %>%
+  st_transform(st_crs(4326))
+```
+
+```{r}
+dc_stations_filtered <- st_join(dc_lines, dc_income, left = FALSE)
+```
+
+```{r}
+dc_map <- ggplot() +
+  geom_sf(
+    data = dc_income,
+    fill = "grey"
+  ) +
+  geom_sf(
+    data = dc_stations_filtered, 
+    color = "blue", 
+    size = 0.75,
+    alpha = 0.5
+  ) +
+  geom_sf(
+    data = dc_stations,
+    color= "blue"
+  ) +
+  geom_sf(data = data_geo %>% filter(cnty2010 == "001", st2010 == "11"), color = "orange", size = 1) +
+  labs(title = "Distribution of LIHTC Housing Projects\n around D.C. Metro Lines and Stations",
+       caption = "Sources:  Open Data DC | LIHTC Dataset") +
+  theme_minimal() +
+  theme(
+    text = element_text(family = "serif"),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank()
+  )
+
+dc_map
+```
+
+As seen from the map, LIHTC projects tend to cluster around stops along metro stops, though being relatively distant to downtown. However, this is a good starting point, because public transportation links local communities to crucial social resources, bringing the residents with more social mobility and opportunities. Therefore, one policy option that the D.C. government can consider is to award additional LIHTC credits to developers proposing projects near transit stops (Dawkins, 2011).
+
+## Supervised Machine Learning
+
+The target variable is "CREDIT", which represents the percentage of the tax deduction received by the asset, coded as 1=30 percent present value, 2=70 percent present value, 3=Both, 4=TCEP only. One of the independent variables is the percentage of low-income households in the asset (LI_UNITS/N_UNITS) TRGT_POP, which represents a special group of people, coded 0=no and 1=yes. METRO represents whether there is a subway when the project is completed, code 1=Metro/Non-Central City 2=Metro/Central City 3=Non-Metro. DDA represents whether it is in a developmentally difficult area, 0=Not in DDA 1=In Metro DDA 2=In Non-Metro DDA 3=In Metro GO Zone DDA 4=In Non-Metro GO Zone DDA.
+
+### Decision Tree
+
+
+The advantage of the decision tree model is that it is easy to understand and explain, and it can intuitively show the degree of influence of each independent variable on the target variable. But the disadvantage is that the decision tree is prone to overfitting, and parameters need to be adjusted to avoid overfitting. So, we use cross-validation and hyperparameters such as the maximum tree depth or minimum samples per leaf. Tuning hyperparameters and performing cross-validation can help to improve the performance, prevent overfitting, and improve the interpretability of decision tree models.
+
+```{r}
+df <- LIHTCPUB %>%
+  select(credit, li_units, n_units, trgt_pop, metro, dda)
+
+df$trgt_pop <- as.factor(df$trgt_pop)
+df$metro <- as.factor(df$metro)
+df$dda <- as.factor(df$dda)
+df$credit <- as.factor(df$credit)
+
+df <- na.omit(df)
+
+df <- df %>% 
+  mutate(li_ratio = li_units/n_units)
+df <- na.omit(df)
+#split
+set.seed(123)
+data_split <- initial_split(df, prop = 0.8, strata = "credit")
+train_data <- training(data_split)
+test_data <- testing(data_split)
+
+# recipe
+recipe <- recipe(credit ~ ., data = train_data) %>%
+  step_dummy(all_nominal(), -all_outcomes()) %>%
+  step_zv(all_predictors())%>%
+  step_downsample(credit,under_ratio = 2)
+#preprocess
+prep<-prep(recipe, train_data)
+
+# model
+tree_spec <- decision_tree(tree_depth=tune(),min_n=tune()) %>%
+  set_engine("rpart") %>%
+  set_mode("classification")
+
+#workflow
+workflow <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(tree_spec)
+
+# cross validation
+folds <- vfold_cv(train_data, v = 5,strata = "credit")
+
+# hyperparameter
+tree_grid <- grid_regular(
+  tree_depth(),
+  min_n(),
+  levels=10)
+
+# tune
+tree_tune <-workflow %>%
+  tune_grid(
+  resamples = folds,
+  grid = tree_grid
+)
+
+# select 
+best_model <- select_best(tree_tune, "roc_auc")
+
+#finalize the wf
+final_workflow <- finalize_workflow(workflow,
+  parameters = best_model) 
+
+#fit 
+final_fit <- final_workflow %>%
+  fit(train_data)
+
+# predict and evaluate model
+prediction<-predict(final_fit, test_data) %>%
+  bind_cols(test_data) %>%
+  select(.pred_class,credit)
+
+#plot a tree
+
+rpart.plot(final_fit$fit$fit$fit)
+```
+
+The first node of this decision tree model represents the number of total units in the property. This node is at the top of the tree, and the sample size is large, indicating that this variable is more important in the model. Among them, 17% of the samples are greater than or equal to 130 households and are classified into the first category, and if they are smaller, they enter the next node. The second node is based on whether dda is greater than or equal to 0.5. That is, the node makes a decision on whether the property is in a difficult area for development. After that, decisions were made based on the total units and the proportion of low-income units. The lower level of the tree subdivides the proportion of low-income units. For the data with low-income units accounting for more than 40%, decisions are made based on whether the number of low-income units exceeds 73. It can be seen from this that the importance of indicators is in descending order of the number of total units, whether they are in areas with poor development, the proportion of low-income units, and the number of low-income units. And whether it is in the metro area or whether it is targeted at a specific group of population does not play a role in this tree.
+
+
+```{r}
+confusion_matrix <- confusionMatrix(prediction$.pred_class, prediction$credit, 
+                                     mode = "prec_recall")
+
+accuracy <- confusion_matrix$overall["Accuracy"]
+
+print(confusion_matrix$table)
+
+print(paste("Accuracy:", round(accuracy, 4)))
+```
+
+We can see that the distribution of each category of data in the training set is not balanced. Downsampling can help to mitigate this issue by reducing the number of samples in the majority class and improving the representation of the minority class.However, downsampling may also lead to loss of information and decrease in overall model accuracy.
+
+### Random forest
+
+```{r}
+#  model
+rf_spec <- rand_forest(mtry = tune(), trees = 100, min_n = tune(), ) %>%
+  set_engine("ranger") %>%
+  set_mode("classification")
+ 
+rf_spec_3 <- rf_spec %>%
+  set_args(mtry = 3)
+
+# workflow
+wf2 <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(rf_spec_3)
+
+# Define hyperparameter grid
+rf_grid <- grid_regular(
+  min_n(),
+  levels = 5
+)
+
+# Tune model
+rf_tune <- wf2 %>%
+  tune_grid(
+    resamples = folds,
+    grid = rf_grid
+  )
+
+# Select best model
+best_rf <- select_best(rf_tune, "roc_auc")
+
+# Finalize workflow with best model
+final_rf <- finalize_workflow(wf2,
+parameters = best_rf)
+
+# Fit model on training data
+fit_rf <- final_rf %>%
+  fit(train_data)
+
+# Make predictions on test data
+prediction2 <- predict(fit_rf, test_data) %>%
+  bind_cols(test_data) %>%
+  select(.pred_class,credit)
+
+```
+
+```{r}
+confusion_matrix2 <- confusionMatrix(prediction2$.pred_class, prediction2$credit, 
+                                     mode = "prec_recall")
+print(confusion_matrix2$table)
+accuracy <- confusion_matrix2$overall['Accuracy']
+
+
+print(paste("Accuracy:", round(accuracy, 4)))
+
+```
+
+In summary, random forests can have higher accuracy than decision trees because they can reduce the variance and overfitting associated with decision trees by aggregating multiple models, and can identify the most important input features for the prediction task.
+
+Another reason for our model's relatively lower accuracy may be that the database contains too little data available. After cleaning the data, there are only about 4,000 pieces of data in the training set, which cannot support more accurate predictions.
+
+## Conclusion
+
+In this project, we used a combination of visualization, geospatial analysis, and machine learning techniques to provide insights into the LIHTC (Low-Income Housing Tax Credit) program.
+
+The visualization of LIHTC property characteristics, such as eligibility basis increase and Difficult Development Areas (DDA) designation, shed light on important factors that have research potential.
+
+In geospatial analysis, we identified LIHTC properties with increased eligibility basis, which suggests a potential impact on expanding affordable housing opportunities. Moreover, the mapping of DDAs highlighted areas where additional support and resources may be needed to overcome development challenges. We also revealed spatial patterns and clusters of LIHTC properties, indicating the presence of "hot spots" in certain areas, especially in DDAs. This information can help policymakers and stakeholders identify regions with high demand for affordable housing and target resources accordingly.
+
+Our machine learning algorithm demonstrates that total units, dda, low income units proportion and low income units are important predictors of credit types issued by the state and local governments. The selected variables can be used to predict eligibility for LIHTC credits, but with limited accuracy. Some variables are more important than others in determining eligibility. The limited accuracy could be attributed to a high number of missing values and the reliance on property-level data, which lacks household-level information, leading to a less precise model. However, the findings from the plots indicate that these variables are related, suggesting that our research can provide guidance for exploring tax credits.
+
+
+## References
+
+1. Scally, Corianne. P., Gold, Amanda; DuBois, Nicole. The low income housing tax credit: How it works and who it serves.Urban Institute. July 12, 2018. https://www.urban.org/research/publication/low-income-housing-tax-credit-how-it-works-and-who-it-serves  
+
+2. Scally, Corianne. P., Gold, Amanda; Hedman, Carl; Matthew Gerken; DuBois, Nicole. The Low-Income Housing Tax Credit: Past Achievements, Future Challenges. Urban Institute. July 12, 2018.
+https://www.urban.org/research/publication/low-income-housing-tax-credit-past-achievements-future-challenges
+
+3. Dirk, W. Housing Credit 101: Eligible Basis and Credit Calculations. National Council of State Housing Agencies. June 19, 2018 https://www.ncsha.org/wp-content/uploads/2018/11/Eligible-Basis-and-Credit-Calculations.pdf  
+
+4. HUD. (n.d.). Low-income housing tax credit (LIHTC): HUD USER. Low-Income Housing Tax Credit (LIHTC) | HUD USER. https://www.huduser.gov/portal/datasets/lihtc.html  
