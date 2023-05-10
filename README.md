@@ -29,7 +29,7 @@ Before loading, make sure you have the csv file named "LIHTCPUB.CSV" in your dir
 Metro lines cropped to the District of Columbia boundary. Metro Lines for DC only. The dataset contains locations and attributes of Metro lines. Lines were taken from legacy data from WMATA and fit to orthophotography and extracted planimetric data.
 Download the zip file called "Metro_Lines_in_DC" from this website: https://opendata.dc.gov/maps/DCGIS::metro-lines-in-dc-1/about. Unzip the files and put the 6 files in a folder called "dcmetro" in your directory.
 
-### 2. DC Metro Stations Dataset
+### 3. DC Metro Stations Dataset
 Metro stations within the District of Columbia boundary. The dataset contains locations and attributes of Metro statioins. Lines were taken from legacy data from WMATA and fit to orthophotography and extracted planimetric data.
 Important: Download the zip file called "Metro_Lines_in_DC" (Yes, the file names are the same) from this website: https://opendata.dc.gov/datasets/DCGIS::metro-lines-in-dc-1/about?layer=52. Unzip the files and put the 6 files in a folder called "Metro_stations_in_DC". Then, put this folder into the "dcmetro" folder in your directory.
 
@@ -66,5 +66,5 @@ library(caret)
 library(rpart.plot)
 
 ## Repository Information
-lease visit the project repository: [PPOL 670 Final Project Repository](https://github.com/yfang133/PPOL-670-Final-Project)
+Please visit the project repository: [PPOL 670 Final Project Repository](https://github.com/yfang133/PPOL-670-Final-Project)
 
